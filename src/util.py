@@ -1,5 +1,4 @@
-__author__ = 'daniel'
-
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -72,8 +71,28 @@ def informative_Xtrain(df, scaled=True):
     return X, y, None
 
 
+def all_Xtrain(df, scaled=True):
+    y = df['signal'].values
+    X = df.drop(['signal', 'SPDhits'], axis=1).values
+    if scaled:
+        ss = StandardScaler()
+        ss.fit(X)
+        Xs = ss.transform(X)
+        return Xs, y, ss
+    return X, y, None
+
+
 def informative_Xtest(df, ss=None):
     X = df[SOLO_SIG_FEATURES].values
+    ids = df['id'].values
+    if ss is not None:
+        Xt = ss.transform(X)
+        return Xt, ids
+    return X, ids
+
+
+def all_Xtest(df, ss=None):
+    X = df.drop(['id', 'SPDhits'], axis=1).values
     ids = df['id'].values
     if ss is not None:
         Xt = ss.transform(X)
@@ -89,6 +108,20 @@ def basic_ml_pipeline(model, traindf, testdf, version_name):
     model.fit(X, y)
     preds = model.predict_proba(Xtest)[:, 1]
     ids_and_preds = zip(testids, preds)
+    prep_submission(ids_and_preds, version_name)
+
+
+# Trains a number of models and lets them vote equally on predicted proba
+def simple_ensemble_pipeline(models, traindf, testdf, version_name):
+    X, y, ss = all_Xtrain(traindf, True)
+    Xtest, testids = all_Xtest(testdf, ss)
+    l = len(models)
+    pred_matrix = np.zeros((Xtest.shape[0], l))
+    for i, m in enumerate(models):
+        m.fit(X, y)
+        pred_matrix[:, i] = m.predict_proba(Xtest)[:, 1]
+    meanpreds = pred_matrix.mean(axis=1)
+    ids_and_preds = zip(testids, meanpreds)
     prep_submission(ids_and_preds, version_name)
 
 
